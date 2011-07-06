@@ -27,7 +27,7 @@ if __name__ == '__main__':
                       dest='wait', type=float, default=0.2,
                       help='')
     parser.add_argument('-b', '--bits', metavar='N',
-                        dest='bits', type=int, default=14,
+                        dest='bits', type=int, default=15,
                         help='')
     parser.add_argument('-d', '--database', metavar='NAME',
                         dest='database', type=unicode, default='wikisentiment',
@@ -51,7 +51,7 @@ if __name__ == '__main__':
         collection = pymongo.database.Database(master, options.database)
 
     # for each 'entry' in the MongoDB, extract features and put them to 'features'
-    extractors = [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt'), WikiSyntaxExtractor()]
+    extractors = [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt', threshold=0.2), WikiSyntaxExtractor(), NgramExtractor(n=2)]
     db = collection['talkpage_diffs_raw']
     cursor = db.find()
     entries = []
@@ -64,10 +64,15 @@ if __name__ == '__main__':
         vector = {}
         for (fset,vals) in features.items():
             for (f,v) in vals.items():
-                h = murmur.string_hash('%s_%s' % (fset,f))
+                h = murmur.string_hash('%s_%s' % (fset, f.encode('utf-8')))
                 h = h & (2 ** options.bits - 1)
-                vector[str(h)] = v
-        ret = (ent['entry']['rev_id'], db.update({'entry.rev_id': ent['entry']['rev_id']}, {'$set': {'vector': vector, 'features': features }}, safe=True))
+                vector[unicode(h)] = v
+        # print db.find({'entry.rev_id': ent['entry']['rev_id']}).count()#!
+        # print vector,features,ent#!
+        ent['vector'] = vector
+        ent['features'] = features
+        ret = db.save(ent, safe=True)
         if options.verbose:
-            print ret
+            print ent['entry']['rev_id']
+
 
