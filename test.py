@@ -11,6 +11,7 @@ import murmur
 import liblinear
 import liblinearutil
 import ast
+import tempfile
 
 from twisted.internet import reactor
 from twisted.web.client import Agent
@@ -20,11 +21,11 @@ from xml.dom import minidom
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--prefix', metavar='FILE',
-                      dest='prefix', type=str, default='output_',
-                      help='')
     parser.add_argument('-f', '--find', metavar='QUERY',
-                        dest='find', type=str, default=None,
+                        dest='find', type=str, default='{}',
+                        help='')
+    parser.add_argument('-m', '--model', metavar='QUERY',
+                        dest='model', type=str, default='{}',
                         help='')
     parser.add_argument('-d', '--database', metavar='NAME',
                         dest='database', type=unicode, default='wikisentiment',
@@ -47,33 +48,24 @@ if __name__ == '__main__':
     else:
         collection = pymongo.database.Database(master, options.database)
 
+    # load models for each label
+    db = collection['models']
+    models = {}
+    for model in db.find(ast.literal_eval(options.model)):
+        tmp = tempfile.mktemp(prefix=model['label'].replace('/','_'))
+        f = open(tmp, 'w')
+        f.write(model['raw_model'])
+        models[model['label']] = liblinearutil.load_model(tmp)
+        f.close()
+
     # contruct the testing set from 'entry's in the MongoDB
+    # construct vectors for libsvm
     db = collection['talkpage_diffs_raw']
     query = {'vector': {'$exists': True}}
-    if options.find != None:
-        query.update(ast.literal_eval(options.find))
+    query.update(ast.literal_eval(options.find))
     cursor = db.find(query)
     print >>sys.stderr, 'labeld examples: %s out of %s' % (cursor.count(), db.count())
 
-    if options.prefix.endswith('.model'):
-        options.prefix = options[0:options.prefix.index('.model')] + '_'
-    if not options.prefix.endswith('_'):
-        options.prefix += '_'
-
-
-    cursor = [x for x in cursor]
-
-    labelset = set()
-    for x in cursor:
-        if x.has_key('labels'):
-            labelset.update(x['labels'])
-
-    # load models for each label
-    models = {}
-    for l in labelset:
-        models[l] = liblinearutil.load_model(options.prefix + l + '.model')
-
-    # construct vectors for libsvm
     vectors = []
     labels = {}
     for ent in cursor:
@@ -95,9 +87,12 @@ if __name__ == '__main__':
             continue
         print lname + ': '
 
-        lab,acc,val = liblinearutil.predict(labs, vecs, m)
+        lab,acc,val = liblinearutil.predict(labs, vecs, m, '-b 1')
 
         # print failure cases
         for (i,pred) in enumerate(lab):
-            if pred != labs[i]:
-                print vectors[i][1]
+            ng = bool(pred) != labs[i]
+            if ng or options.verbose:
+                print vectors[i][1], bool(pred), labs[i], '%4.3f' % max(val[i]), 'ng' if ng else 'ok'
+
+        # TODO: f-measure
