@@ -12,6 +12,7 @@ import liblinear
 import liblinearutil
 import ast
 import tempfile
+from collections import namedtuple
 
 from twisted.internet import reactor
 from twisted.web.client import Agent
@@ -23,6 +24,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--find', metavar='QUERY',
                         dest='find', type=str, default='{}',
+                        help='')
+    parser.add_argument('-o', '--output', metavar='FILE',
+                        dest='output', type=str, default='/dev/stdout',
                         help='')
     parser.add_argument('-m', '--model', metavar='QUERY',
                         dest='model', type=str, default='{}',
@@ -68,17 +72,25 @@ if __name__ == '__main__':
 
     vectors = []
     labels = {}
+    for x in models.keys():
+        labels[x] = []
     for ent in cursor:
-        if not ent.has_key('labels'):
-            print >>sys.stderr, 'skip ' + ent['entry']['rev_id']
-            continue
-        for (name,value) in ent['labels'].items():
-            labels.setdefault(name, []).append(value if 1 else -1)
+        for name in labels.keys():
+            value = None
+            if ent.has_key('labels') and ent['labels'].has_key(name):
+                value = ent['labels'][name] if 1 else -1
+            labels.setdefault(name, []).append(value)
         vec = {}
         for (x,y) in ent['vector'].items():
             vec[int(x)] = float(y)
-        vectors.append((vec, ent['entry']['rev_id']))
+        vectors.append((vec, ent['entry']))
 
+    for (name,vals) in labels.items():
+        assert len(vectors) == len(vals), [len(vectors), len(vals), name]
+
+    writer = csv.writer(open(options.output, 'w'), delimiter='\t')
+    writer.writerow([unicode(x) for x in ['label', 'rev_id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
+    pn_tuple = namedtuple('pn', 'p n')
     vecs = map(lambda x: x[0], vectors)
     for (lname, labs) in labels.items():
         m = models[lname]
@@ -89,10 +101,26 @@ if __name__ == '__main__':
 
         lab,acc,val = liblinearutil.predict(labs, vecs, m, '-b 1')
 
-        # print failure cases
+        # print performances nad failure cases
+        pn = pn_tuple({True: 0, False: 0},
+                      {True: 0, False: 0})
         for (i,pred) in enumerate(lab):
-            ng = bool(pred) != labs[i]
-            if ng or options.verbose:
-                print vectors[i][1], bool(pred), labs[i], '%4.3f' % max(val[i]), 'ng' if ng else 'ok'
-
-        # TODO: f-measure
+            ok = bool(pred) == labs[i]
+            res = 'Yes' if ok else 'No'
+            if labs[i] == None:
+                res = 'Unknown'
+            else:
+                if pred > 0:
+                    pn.p[ok] += 1
+                else:
+                    pn.n[ok] += 1
+            if not ok or options.verbose:
+                link = 'http://en.wikipedia.org/w/index.php?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
+                writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), vectors[i][1]['content'][0:50]]])
+        print ' accuracy  = %f' % (float(pn.p[True] + pn.n[True]) / sum(pn.p.values() + pn.n.values()))
+        prec = float(pn.p[True]) / sum(pn.p.values())
+        reca = float(pn.p[True]) / (pn.p[True] + pn.n[False])
+        print ' precision = %f' % prec
+        print ' recall    = %f' % reca
+        print ' fmeasure  = %f' % (1.0 / (0.5/prec + 0.5/reca))
+        print pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])

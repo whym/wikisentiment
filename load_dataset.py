@@ -8,6 +8,7 @@ import argparse
 import urllib2
 import time
 import re
+import ast
 
 from twisted.internet import reactor
 from twisted.web.client import Agent
@@ -36,12 +37,25 @@ def get_revisions(revs):
         except urllib2.URLError:
             time.sleep(5)
 
-    revs = minidom.parseString(res).getElementsByTagName('rev')
-    return revs
+    ret = []
+    pages = minidom.parseString(res).getElementsByTagName('page')
+    for p in pages:
+        for r in p.getElementsByTagName('rev'):
+            ret.append((p, r))
+    return ret
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--field', metavar='COLUMN',
+                        dest='revfield', type=int, default=2,
+                        help='column that contains revision IDs')
+    parser.add_argument('-l', '--labels', metavar='COLUMNS',
+                        dest='labels', type=int, default=None,
+                        help='columns that contain labels (a label is 0 or 1)')
+    parser.add_argument('-D', '--delimiter', metavar='CHARACTER',
+                        dest='delimiter', type=str, default=',',
+                        help='')
     parser.add_argument('-w', '--wait', metavar='SECS',
                         dest='wait', type=float, default=0.5,
                         help='')
@@ -75,10 +89,13 @@ if __name__ == '__main__':
 
     # load raw table of coded examples
     csv.field_size_limit(1000000000)
-    table = list(csv.reader(open(options.input)))
-    header = table[0][2:6]
-    header = [None,None] + header
-    table = table[1:]
+    table = list(csv.reader(open(options.input), delimiter=ast.literal_eval('"'+options.delimiter+'"')))
+    header = []
+    if options.labels != None:
+        header = [None for x in xrange(0, len(table[0]))]
+        for c in options.labels.split(','):
+            header[c] = table[0][c]
+        table = table[1:]
     table_size = len(table)
 
     # prepare HTTP agent for accessing Wikipedia API
@@ -102,8 +119,7 @@ if __name__ == '__main__':
         existings = {}
         for x in db.find({'entry.rev_id': {'$exists': True}, 'entry.content': {'$exists': True}}, {'entry.rev_id':1, 'entry.content':1}):
             existings[x['entry']['rev_id']] = True
-        print existings
-        table = filter(lambda x: not existings.has_key(int(x[1])), table)
+        table = filter(lambda x: not existings.has_key(int(x[options.revfield])), table)
 
     while len(table) > 0:
         colslices = table[0:options.slice]
@@ -115,21 +131,21 @@ if __name__ == '__main__':
             for (i,lab) in enumerate(header):
                 if lab != None:
                     labels[lab] = bool(int(cols[i]))
-            ent = {'entry': {'title': cols[0],
-                             'receiver': cols[0],
-                             'rev_id': int(cols[1]),
-                             },
-                   'labels': labels}
+            ent = {'entry': {'rev_id': int(cols[options.revfield]),
+                             }}
+            if options.labels != None:
+                ent.update({'labels': labels})
             ls.append(ent)
-            revmap[int(cols[1])] = cols
+            revmap[int(cols[options.revfield])] = cols
 
         # call API to get content etc
         revs = get_revisions([str(x) for x in revmap.keys()])
         print >>sys.stderr, "received %d (%d/%d)" % (len(revs), len(revs) + db.count(), table_size)
 
         queued = []
-        for (i,rev) in enumerate(revs):
-            ls[i]['entry']['sender'] = rev.attributes['user'].value
+        for (i,(page,rev)) in enumerate(revs):
+            ls[i]['entry'].update({'sender': rev.attributes['user'].value,
+                                   'title': page.attributes['title'].value})
             assert ls[i]['entry']['rev_id'] == int(rev.attributes['revid'].value), [ls[i], rev.toxml()]
             if len(rev.childNodes) == 0:
                 raise "empty diff: %s" % rev.toxml()
@@ -137,7 +153,6 @@ if __name__ == '__main__':
                 if rev.childNodes[0].attributes.has_key('notcached'):
                     print 'no cache ' + rev.attributes['revid'].value
                     queued.append(revmap[int(rev.attributes['revid'].value)])
-                #print diffparse(rev.childNodes[0].childNodes[0].data)
                 else:
                     ls[i]['entry']['content'] = diffparse(rev.childNodes[0].childNodes[0].data)
         for x in ls:

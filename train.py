@@ -50,22 +50,30 @@ if __name__ == '__main__':
 
     # contruct the training set from 'entry's in the MongoDB
     db = collection['talkpage_diffs_raw']
-    query = {'vector': {'$exists': True}}
+    query = {'labels': {'$exists': True},
+             'vector': {'$exists': True}}
     query.update(ast.literal_eval(options.find))
     cursor = db.find(query)
     print >>sys.stderr, 'using labeld examples: %s out of %s' % (cursor.count(), db.count())
     labels = {}
     vectors = []
+    entries = []
     for ent in cursor:
         if not ent.has_key('labels'):
-            print >>sys.stderr, 'skip ' + ent['entry']['rev_id']
+            print >>sys.stderr, 'skip %s' % ent['entry']['rev_id']
             continue
-        for (name,value) in ent['labels'].items():
-            labels.setdefault(name, []).append(value if 1 else -1)
         vec = {}
         for (x,y) in ent['vector'].items():
             vec[int(x)] = float(y)
+        if len(vec.items()) == 0:
+            print >>sys.stderr, 'empty %s' % ent['entry']['rev_id']
+            #continue
         vectors.append(vec)
+        entries.append(ent)
+        for (name,value) in ent['labels'].items():
+            labels.setdefault(name, []).append(value if 1 else -1)
+        if options.verbose:
+            print >>sys.stderr, str(ent['entry']['rev_id'])
 
     if options.verbose:
         print >>sys.stderr, 'vectors loaded'
@@ -78,7 +86,7 @@ if __name__ == '__main__':
             print >>sys.stderr, '%s problem constructed' % lname
         m = liblinearutil.train(prob, liblinear.parameter('-s 6'))
         if options.verbose:
-            print >>sys.stderr, '%s trained' % lname
+            print >>sys.stderr, '"%s" model trained' % lname
 
         lab,acc,val = liblinearutil.predict(labs, vectors, m)
 
