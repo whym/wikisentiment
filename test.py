@@ -8,8 +8,8 @@ import argparse
 import urllib2
 import time
 import murmur
-import liblinear
-import liblinearutil
+import liblinear.linear
+import liblinear.linearutil
 import ast
 import tempfile
 from collections import namedtuple
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         tmp = tempfile.mktemp(prefix=model['label'].replace('/','_'))
         f = open(tmp, 'w')
         f.write(model['raw_model'])
-        models[model['label']] = liblinearutil.load_model(tmp)
+        models[model['label']] = liblinear.linearutil.load_model(tmp)
         f.close()
 
     # contruct the testing set from 'entry's in the MongoDB
@@ -99,7 +99,7 @@ if __name__ == '__main__':
             continue
         print lname + ': '
 
-        lab,acc,val = liblinearutil.predict(labs, vecs, m, '-b 1')
+        lab,acc,val = liblinear.linearutil.predict(labs, vecs, m, '-b 1')
 
         # print performances nad failure cases
         pn = pn_tuple({True: 0, False: 0},
@@ -114,9 +114,8 @@ if __name__ == '__main__':
                     pn.p[ok] += 1
                 else:
                     pn.n[ok] += 1
-            if not ok or options.verbose:
-                link = 'http://en.wikipedia.org/w/index.php?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
-                writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), vectors[i][1]['content'][0:50]]])
+            link = 'http://en.wikipedia.org/w/index.php?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
+            writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), vectors[i][1]['content'][0:50]]])
         print ' accuracy  = %f' % (float(pn.p[True] + pn.n[True]) / sum(pn.p.values() + pn.n.values()))
         prec = float(pn.p[True]) / sum(pn.p.values())
         reca = float(pn.p[True]) / (pn.p[True] + pn.n[False])

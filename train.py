@@ -8,8 +8,8 @@ import argparse
 import urllib2
 import time
 import murmur
-import liblinear
-import liblinearutil
+import liblinear.linear
+import liblinear.linearutil
 import ast
 import tempfile
 
@@ -76,22 +76,25 @@ if __name__ == '__main__':
             print >>sys.stderr, str(ent['entry']['rev_id'])
 
     if options.verbose:
-        print >>sys.stderr, 'vectors loaded'
+        print >>sys.stderr, 'vectors loaded %s' % len(vectors)
+
+    for (name,vals) in labels.items():
+        assert len(vectors) == len(vals), [len(vectors), len(vals), name]
 
     # train and output models
     db = collection['models']
     for (lname, labs) in labels.items():
-        prob = liblinear.problem(labs, vectors)
+        prob = liblinear.linear.problem(labs, vectors)
         if options.verbose:
-            print >>sys.stderr, '%s problem constructed' % lname
-        m = liblinearutil.train(prob, liblinear.parameter('-s 6'))
+            print >>sys.stderr, '"%s" problem constructed' % lname
+        m = liblinear.linearutil.train(prob, liblinear.linear.parameter('-s 6'))
         if options.verbose:
             print >>sys.stderr, '"%s" model trained' % lname
 
-        lab,acc,val = liblinearutil.predict(labs, vectors, m)
+        lab,acc,val = liblinear.linearutil.predict(labs, vectors, m)
 
         tmp = tempfile.mktemp(prefix=lname.replace('/','_'))
-        liblinearutil.save_model(tmp, m)
+        liblinear.linearutil.save_model(tmp, m)
         print >>sys.stderr, '%s: %s' % (lname, tmp)
 
         model = open(tmp).read()
