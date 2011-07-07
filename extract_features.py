@@ -66,7 +66,7 @@ if __name__ == '__main__':
             for (f,v) in vals.items():
                 h = murmur.string_hash('%s_%s' % (fset, f.encode('utf-8')))
                 h = h & (2 ** options.bits - 1)
-                vector[unicode(h)] = v
+                vector[unicode(h + 1)] = v
         # print db.find({'entry.rev_id': ent['entry']['rev_id']}).count()#!
         # print vector,features,ent#!
         ent['vector'] = vector
