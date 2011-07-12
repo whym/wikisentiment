@@ -115,7 +115,7 @@ if __name__ == '__main__':
                 else:
                     pn.n[ok] += 1
             link = 'http://en.wikipedia.org/w/index.php?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
-            writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), vectors[i][1]['content'][0:50]]])
+            writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), ' '.join(vectors[i][1]['content']['added'])[0:50]]])
         print ' accuracy  = %f' % (float(pn.p[True] + pn.n[True]) / sum(pn.p.values() + pn.n.values()))
         prec = float(pn.p[True]) / sum(pn.p.values())
         reca = float(pn.p[True]) / (pn.p[True] + pn.n[False])

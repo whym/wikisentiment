@@ -1,0 +1,11 @@
+WIKI_WP_COLON	\[\[(wp|WP|wikipedia|Wikipedia):(.*?)[\|\]]	#expand&binary
+WIKI_HELP_COLON	\[\[(help|Help):
+WIKI_TMPL	\{\{(.*?)[\|\}]	#expand&binary
+WIKI_TMPLONLY	^\{\{.*\}\}$
+WIKI_TMPLLINK	[tT]emplate:
+WIKI_WIKIPROJECT	[wW]iki( |)[pP]roject
+WIKI_REDIRECT	\#(redirect|REDIRECT)
+WIKI_DELETION	\[\[Wikipedia\:(Articles for deletion|Proposed deletion)\|
+TERM_VANDAL	[vV]andal
+TERM_BLOCK	[bB]lock
+#TERM_WELCOME_T	Thank you for your contributions

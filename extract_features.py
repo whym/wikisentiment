@@ -51,7 +51,7 @@ if __name__ == '__main__':
         collection = pymongo.database.Database(master, options.database)
 
     # for each 'entry' in the MongoDB, extract features and put them to 'features'
-    extractors = [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt', threshold=0.2), WikiSyntaxExtractor(), NgramExtractor(n=2)]
+    extractors = [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt', threshold=0.2), WikiPatternExtractor(), NgramExtractor(n=2)]
     db = collection['talkpage_diffs_raw']
     cursor = db.find()
     entries = []

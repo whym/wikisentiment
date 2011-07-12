@@ -2,27 +2,41 @@ import csv
 import re
 import nltk
 
-class WikiSyntaxExtractor:
-    def __init__(self):
+class WikiPatternExtractor:
+    def __init__(self, file='patterns.txt'):
         self.patterns = {}
-        self.patterns['WP_COLON'] = re.compile('\[\[(wp|WP|wikipedia|Wikipedia):')
-        self.patterns['HELP_COLON'] = re.compile('\[\[(help|Help):')
-        self.patterns['TMPL'] = re.compile('\{\{')
-        self.patterns['TMPLONLY'] = re.compile('^\{\{.*\}\}$')
-        self.patterns['TMPLLINK'] = re.compile('[tT]emplate:')
-        self.patterns['VANDAL'] = re.compile('[vV]andal')
-        self.patterns['BLOCK'] = re.compile('[bB]lock')
-        self.patterns['WIKIPROJECT'] = re.compile('[wW]iki( |)[pP]roject')
-        self.patterns['REDIRECT'] = re.compile('\#(redirect|REDIRECT)')
-        self.patterns['DELETION'] = re.compile('\[\[Wikipedia\:(Articles for deletion|Proposed deletion)\|')
+        self.patterns_expanded = {}
+        for line in open(file):
+            cstart = line.find('#')
+            if cstart >= 0:
+                cc = line.find('\\#')
+                if cc + 1 != cstart:
+                    line = line[0:cstart]
+
+            line = line.strip()
+            if len(line) == 0:
+                continue
+                
+            a = line.split('\t')
+            expand = ''
+            if len(a) == 3:
+                expand = a.pop()
+            name,patt = a
+            if expand.find('expand') >= 0:
+                self.patterns_expanded[name] = re.compile(patt)
+            if expand.find('binary') >= 0 or expand == '':
+                self.patterns[name] = re.compile(patt)
     def extract(self, entry):
         ret = {}
         for (pname,pat) in self.patterns.items():
-            if pat.search(entry['entry']['content']):
-                ret[pname] = 1.0
+            if pat.search(' '.join(entry['entry']['content']['added'])):
+                ret[pname] = True
+        for (pname,pat) in self.patterns_expanded.items():
+            for m in pat.finditer(' '.join(entry['entry']['content']['added'])):
+                ret['_'.join([pname]+list(m.groups()))] = True
         return ret
     def name(self):
-        return 'WikiSyntaxExtractor'
+        return 'WikiPatternExtractor'
 
 class NgramExtractor:
     def __init__(self, n=2):
@@ -30,7 +44,7 @@ class NgramExtractor:
         self.wordsegment = re.compile('[ \{\}\n\\(\)\'>]') # use NLTK segmenter
     def extract(self, entry):
         ret = {}
-        words = self.wordsegment.split(entry['entry']['content'])
+        words = self.wordsegment.split(' '.join(entry['entry']['content']['added']))
         for ng in nltk.ngrams(words, self.n):
             ret['_'.join(ng)] = True
             if len(ret) == 100:
@@ -69,7 +83,7 @@ class SentiWordNetExtractor:
         # TODO: proper word segmentation (ex. using NLTK?)
         # TODO: try pos tatgging and sense disambiguation
         #print entry['entry']
-        words = self.wordsegment.split(entry['entry']['content'])
+        words = self.wordsegment.split(' '.join(entry['entry']['content']['added']))
         words = filter(lambda x: len(x) > 0, words)
         words = map(lambda x: re.sub('[\?\!\.,;:\-"\']$', '', x), words)
         words = map(lambda x: self.lemmatizer.lemmatize(x), words)
@@ -84,7 +98,7 @@ class SentiWordNetExtractor:
 
 if __name__ == '__main__':
     # some examples
-    for fx in [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt'), NgramExtractor(2), WikiSyntaxExtractor()]:
+    for fx in [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt'), NgramExtractor(2), WikiPatternExtractor()]:
         print fx.name()
         print fx.extract({"entry" : { "content" : "{{welcome}}\n[[User:Jwrosenzweig|Jwrosenzweig]] 00:37, 1 Feb 2005 (UTC)\nP.S. I've reformatted [[Marrowstone, Washington]] a little so that the external link to Fort Flagler is in the external links section, and so that [[Fort Flagler]] links to the empty article on the fort (maybe you'd take a shot at writing it?).  Give it a look if you have time.  Thanks for your contributions: they're very appreciated!", "receiver" : "Vishakha", "sender" : "Jwrosenzweig", "rev_id" : 17231315, "title" : "Vishakha" } })
         print fx.extract({"entry" : { "content" : "Hi, ElfineM, welcome to Wikipedia. I hope you like the place and choose to [[Wikipedia:Wikipedians|stay]]... Check out [[Template:Welcome]] for some good links to help you get started, if you need to.\n\nJust a quick point, if you want to comment on an article, usually the most recent talk goes at the bottom of the page. I've done this for you at [[Talk:Feminism]].\n\nIf you've any more questions you have, don't hesiste to ask me at my [[User talk:Dysprosia|talk page]], or on the [[Wikipedia:Village pump]].\n\nHave fun! [[User:Dysprosia|Dysprosia]] 05:10, 5 Feb 2005 (UTC)", "receiver" : "Lincspoacher", "sender" : "Dysprosia", "rev_id" : 10192272, "title" : "Lincspoacher" } })
