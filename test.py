@@ -92,7 +92,7 @@ if __name__ == '__main__':
     writer.writerow([unicode(x) for x in ['label', 'rev_id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
     pn_tuple = namedtuple('pn', 'p n')
     vecs = map(lambda x: x[0], vectors)
-    for (lname, labs) in labels.items():
+    for (lname, labs) in sorted(labels.items(), key=lambda x: x[0]):
         m = models[lname]
         if m == None:
             print >>sys.stderr, lname
@@ -117,9 +117,9 @@ if __name__ == '__main__':
             link = 'http://en.wikipedia.org/w/index.php?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
             writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), ' '.join(vectors[i][1]['content']['added'])[0:50]]])
         print ' accuracy  = %f' % (float(pn.p[True] + pn.n[True]) / sum(pn.p.values() + pn.n.values()))
-        prec = float(pn.p[True]) / sum(pn.p.values())
-        reca = float(pn.p[True]) / (pn.p[True] + pn.n[False])
+        prec = float(pn.p[True]) / sum(pn.p.values()) if sum(pn.p.values()) != 0 else float('nan')
+        reca = float(pn.p[True]) / (pn.p[True] + pn.n[False]) if pn.p[True] + pn.n[False] != 0 else float('nan')
         print ' precision = %f' % prec
         print ' recall    = %f' % reca
-        print ' fmeasure  = %f' % (1.0 / (0.5/prec + 0.5/reca))
-        print pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])
+        print ' fmeasure  = %f' % (1.0 / (0.5/prec + 0.5/reca)) if prec != 0 and reca != 0 else float('nan')
+        print '', pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])
