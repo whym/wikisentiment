@@ -14,11 +14,6 @@ import ast
 import tempfile
 from collections import namedtuple
 
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from xml.dom import minidom
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -26,7 +21,10 @@ if __name__ == '__main__':
                         dest='find', type=str, default='{}',
                         help='')
     parser.add_argument('-o', '--output', metavar='FILE',
-                        dest='output', type=str, default='/dev/stdout',
+                        dest='output', type=lambda x: open(x, 'w'), default=sys.stdout,
+                        help='')
+    parser.add_argument('-l', '--snippet-len', metavar='N',
+                        dest='snippetlen', type=int, default=50,
                         help='')
     parser.add_argument('-m', '--model', metavar='QUERY',
                         dest='model', type=str, default='{}',
@@ -40,6 +38,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose',
                         dest='verbose', action='store_true', default=False,
                         help='turn on verbose message output')
+    parser.add_argument('-a', '--aggregate',
+                        dest='aggregate', action='store_true', default=False,
+                        help='aggregate multi-labeled predictions with rev_id')
     options = parser.parse_args()
 
     # establish MongoDB connection
@@ -88,11 +89,17 @@ if __name__ == '__main__':
     for (name,vals) in labels.items():
         assert len(vectors) == len(vals), [len(vectors), len(vals), name]
 
-    writer = csv.writer(open(options.output, 'w'), delimiter='\t')
-    writer.writerow([unicode(x) for x in ['label', 'rev_id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
+    labels = sorted(labels.items(), key=lambda x: x[0])
+
+    writer = csv.writer(options.output, delimiter='\t')
+    if options.aggregate:
+        writer.writerow([unicode(x) for x in ['label', 'rev_id'] + [x[0] for x in labels] + ['diff', 'snippet']])
+    else:
+        writer.writerow([unicode(x) for x in ['rev_id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
     pn_tuple = namedtuple('pn', 'p n')
     vecs = map(lambda x: x[0], vectors)
-    for (lname, labs) in sorted(labels.items(), key=lambda x: x[0]):
+    output = {}
+    for (lname, labs) in labels:
         m = models[lname]
         if m == None:
             print >>sys.stderr, lname
@@ -101,7 +108,7 @@ if __name__ == '__main__':
 
         lab,acc,val = liblinear.linearutil.predict(labs, vecs, m, '-b 1')
 
-        # print performances nad failure cases
+        # print performances and failure cases
         pn = pn_tuple({True: 0, False: 0},
                       {True: 0, False: 0})
         for (i,pred) in enumerate(lab):
@@ -114,12 +121,33 @@ if __name__ == '__main__':
                     pn.p[ok] += 1
                 else:
                     pn.n[ok] += 1
-            link = 'http://en.wikipedia.org/w/index.php?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
-            writer.writerow([unicode(x).encode('utf-8') for x in [lname, vectors[i][1]['rev_id'], bool(pred), labs[i], '%4.3f' % max(val[i]), res, '=HYPERLINK("%s","%s")' % (link,link), ' '.join(vectors[i][1]['content']['added'])[0:50]]])
-        print ' accuracy  = %f' % (float(pn.p[True] + pn.n[True]) / sum(pn.p.values() + pn.n.values()))
-        prec = float(pn.p[True]) / sum(pn.p.values()) if sum(pn.p.values()) != 0 else float('nan')
-        reca = float(pn.p[True]) / (pn.p[True] + pn.n[False]) if pn.p[True] + pn.n[False] != 0 else float('nan')
-        print ' precision = %f' % prec
-        print ' recall    = %f' % reca
-        print ' fmeasure  = %f' % (1.0 / (0.5/prec + 0.5/reca)) if prec != 0 and reca != 0 else float('nan')
-        print '', pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])
+            link = 'http://enwp.org/?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
+            ls = [lname,
+                  vectors[i][1]['rev_id'],
+                  bool(pred),
+                  labs[i],
+                  '%4.3f' % max(val[i]),
+                  res,
+                  '=HYPERLINK("%s","%s")' % (link,link),
+                  '"' + (' '.join(vectors[i][1]['content']['added'])[0:options.snippetlen]) + '"' if vectors[i][1].has_key('content') else '(empty)']
+            output.setdefault(ls[1],[]).append(ls)
+        numcorrect = pn.p[True] + pn.n[True]
+        numwrong   = pn.p[False] + pn.n[False]
+        if options.verbose:
+            print ' accuracy  = %f (%d/%d)' % (float(numcorrect) / (numcorrect + numwrong) if numcorrect + numwrong > 0 else float('nan'),
+                                               numcorrect,
+                                               (numcorrect + numwrong))
+            prec = float(pn.p[True]) / sum(pn.p.values()) if sum(pn.p.values()) != 0 else float('nan')
+            reca = float(pn.p[True]) / (pn.p[True] + pn.n[False]) if pn.p[True] + pn.n[False] != 0 else float('nan')
+            print ' precision = %f' % prec
+            print ' recall    = %f' % reca
+            print ' fmeasure  = %f' % (1.0 / (0.5/prec + 0.5/reca)) if prec != 0 and reca != 0 else float('nan')
+            print '', pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])
+
+    if options.aggregate:
+        for (rev_id, s) in output.items():
+            writer.writerow([unicode(x).encode('utf-8') for x in (s[0][1:2] + [unicode(x[2]) for x in s] + s[0][-2:])])
+    else:
+        for (rev_id, s) in output.items():
+            for ls in s:
+                writer.writerow([unicode(x).encode('utf-8') for x in ls])

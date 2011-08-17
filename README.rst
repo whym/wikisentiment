@@ -1,4 +1,3 @@
-
 =====================
 WikiSentiment
 =====================
@@ -65,7 +64,7 @@ Requirements
 
 * urllib2
 * pymongo
-* nltk
+* nltk (wordnet)
 * murmur
 * liblinear, liblinearutil
 

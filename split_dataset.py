@@ -73,5 +73,5 @@ if __name__ == '__main__':
     numbers = splits([int(x) for x in options.split.split(',')], cursor.count())
     random.shuffle(numbers)
     assert cursor.count() == len(numbers), [cursor.count(), len(number)]
-    for (n,ent) in enumerate(cursor):
+    for (n,ent) in enumerate(sorted(cursor, key=lambda x: x['entry']['rev_id'])):
         print (numbers[n], ent['entry']['rev_id'], db.update({'entry.rev_id': ent['entry']['rev_id']}, {'$set': {'internal.slice': numbers[n]}}, safe=True))

@@ -14,6 +14,8 @@ from twisted.internet import reactor
 from twisted.web.client import Agent
 from twisted.web.http_headers import Headers
 from xml.dom import minidom
+from itertools import groupby
+from datetime import datetime
 
 def slices(ls, size=2):
     n = int(float(len(ls)) / size + 0.5)
@@ -39,7 +41,7 @@ def diffparse(diff):
     return ret2
 
 def get_revisions(revs):
-    url  ='http://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvdiffto=prev&rvprop=timestamp|ids|user&format=xml&revids=' + '|'.join(revs) 
+    url  ='http://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvdiffto=prev&rvprop=size|timestamp|ids|user|comment&format=xml&revids=%s' % ('|'.join(revs))
     while True:
         try:
             print >>sys.stderr, 'fetching %s' % url
@@ -63,10 +65,10 @@ if __name__ == '__main__':
                         dest='revfield', type=int, default=2,
                         help='column that contains revision IDs')
     parser.add_argument('-l', '--labels', metavar='COLUMNS',
-                        dest='labels', type=str, default=None,
+                        dest='labels', type=lambda x: [int(y)-1 for y in x.split(',')], default=None,
                         help='columns that contain labels (a label is 0 or 1)')
     parser.add_argument('-D', '--delimiter', metavar='CHARACTER',
-                        dest='delimiter', type=str, default=',',
+                        dest='delimiter', type=lambda x: ast.literal_eval('"'+x+'"'), default=',',
                         help='')
     parser.add_argument('-w', '--wait', metavar='SECS',
                         dest='wait', type=float, default=0.5,
@@ -101,12 +103,11 @@ if __name__ == '__main__':
 
     # load raw table of coded examples
     csv.field_size_limit(1000000000)
-    table = list(csv.reader(open(options.input), delimiter=ast.literal_eval('"'+options.delimiter+'"')))
+    table = list(csv.reader(open(options.input), delimiter=options.delimiter))
     header = []
     if options.labels != None:
         header = [None for x in xrange(0, len(table[0]))]
-        for c in options.labels.split(','):
-            c = int(c) - 1
+        for c in options.labels:
             header[c] = table[0][c]
         table = table[1:]
     table_size = len(table)
@@ -127,6 +128,9 @@ if __name__ == '__main__':
 
     # put them into MongoDB (raw information is put into the "entry" attribute)
     db = collection['talkpage_diffs_raw']
+
+    digits = re.compile('\d+')
+    table = filter(lambda x: digits.match(x[options.revfield]), table)
 
     if not options.overwrite:
         # get existing entries
@@ -155,24 +159,32 @@ if __name__ == '__main__':
 
         # call API to get content etc
         revs = get_revisions([str(x) for x in rev2cols.keys()])
-        print >>sys.stderr, "received %d (%d/%d)" % (len(revs), len(revs) + db.count(), table_size)
 
-        queued = []
-        for (i,(page,rev)) in enumerate(revs):
+        keyfunc = lambda x: x[1].childNodes[0].attributes.has_key('notcached')
+        revs.sort(key=keyfunc)
+        groups = dict(groupby(revs, key=keyfunc))
+        groups.setdefault(False, [])
+        groups.setdefault(True,  [])
+        revs = list(groups[False])
+        queued = [rev2cols[int(x[1].attributes['revid'].value)] for x in groups[True]]
+        table = queued + table
+        print >>sys.stderr, "received %d, queued %d (%d/%d)" % (len(revs), len(queued), len(revs) + db.count(), table_size)
+
+        for (page,rev) in revs:
             ent = rev2entry[int(rev.attributes['revid'].value)]
-            ent.update({'sender': rev.attributes['user'].value,
-                                   'title': page.attributes['title'].value})
-            if len(rev.childNodes) == 0:
-                raise "empty diff: %s" % rev.toxml()
+            ent['entry'].update({'title'  : page.attributes['title'].value})
+            for (orig, (tar,func)) in {'user': ('sender', unicode),
+                                       'comment': ('comment', unicode),
+                                       'timestamp': ('timestamp', lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M:%SZ')),
+                                       'size': ('size', int)
+                                       }.items():
+                ent['entry'][tar] = func(rev.attributes[orig].value)
+            if len(rev.childNodes) == 0 or len(rev.childNodes[0].childNodes) == 0:
+                print >>sys.stderr, "empty diff: %s" % rev.toxml()
             else:
-                if rev.childNodes[0].attributes.has_key('notcached'):
-                    print 'no cache ' + rev.attributes['revid'].value
-                    queued.append(rev2cols[int(rev.attributes['revid'].value)])
-                else:
-                    ent['entry']['content'] = diffparse(rev.childNodes[0].childNodes[0].data)
+                ent['entry']['content'] = diffparse(rev.childNodes[0].childNodes[0].data)
         for x in rev2entry.values():
             db.update({'entry.rev_id': x['entry']['rev_id']}, x, upsert=True, safe=True)
-        table = queued + table
         time.sleep(options.wait)
 
 

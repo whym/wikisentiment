@@ -87,7 +87,7 @@ if __name__ == '__main__':
         prob = liblinear.linear.problem(labs, vectors)
         if options.verbose:
             print >>sys.stderr, '"%s" problem constructed' % lname
-        m = liblinear.linearutil.train(prob, liblinear.linear.parameter('-s 6'))
+        m = liblinear.linearutil.train(prob, liblinear.linear.parameter('-s 6 -c 0.8'))
         if options.verbose:
             print >>sys.stderr, '"%s" model trained' % lname
 
