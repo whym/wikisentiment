@@ -40,7 +40,7 @@ if __name__ == '__main__':
                         help='turn on verbose message output')
     parser.add_argument('-a', '--aggregate',
                         dest='aggregate', action='store_true', default=False,
-                        help='aggregate multi-labeled predictions with rev_id')
+                        help='aggregate multi-labeled predictions with id')
     options = parser.parse_args()
 
     # establish MongoDB connection
@@ -93,9 +93,9 @@ if __name__ == '__main__':
 
     writer = csv.writer(options.output, delimiter='\t')
     if options.aggregate:
-        writer.writerow([unicode(x) for x in ['label', 'rev_id'] + [x[0] for x in labels] + ['diff', 'snippet']])
+        writer.writerow([unicode(x) for x in ['label', 'id'] + [x[0] for x in labels] + ['diff', 'snippet']])
     else:
-        writer.writerow([unicode(x) for x in ['rev_id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
+        writer.writerow([unicode(x) for x in ['id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
     pn_tuple = namedtuple('pn', 'p n')
     vecs = map(lambda x: x[0], vectors)
     output = {}
@@ -121,16 +121,17 @@ if __name__ == '__main__':
                     pn.p[ok] += 1
                 else:
                     pn.n[ok] += 1
-            link = 'http://enwp.org/?diff=prev&oldid=%s' % vectors[i][1]['rev_id']
+            revid = vectors[i][1]['id']['rev_id'] if vectors[i][1]['id'].has_key('rev_id') else None
+            link = 'http://enwp.org/?diff=prev&oldid=%s' % revid
             ls = [lname,
-                  vectors[i][1]['rev_id'],
+                  revid,
                   bool(pred),
                   labs[i],
                   '%4.3f' % max(val[i]),
                   res,
                   '=HYPERLINK("%s","%s")' % (link,link),
                   '"' + (' '.join(vectors[i][1]['content']['added'])[0:options.snippetlen]) + '"' if vectors[i][1].has_key('content') else '(empty)']
-            output.setdefault(ls[1],[]).append(ls)
+            output.setdefault(vectors[i][1]['id'],[]).append(ls)
         numcorrect = pn.p[True] + pn.n[True]
         numwrong   = pn.p[False] + pn.n[False]
         if options.verbose:
@@ -145,9 +146,9 @@ if __name__ == '__main__':
             print '', pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])
 
     if options.aggregate:
-        for (rev_id, s) in output.items():
+        for (id, s) in output.items():
             writer.writerow([unicode(x).encode('utf-8') for x in (s[0][1:2] + [unicode(x[2]) for x in s] + s[0][-2:])])
     else:
-        for (rev_id, s) in output.items():
+        for (id, s) in output.items():
             for ls in s:
                 writer.writerow([unicode(x).encode('utf-8') for x in ls])

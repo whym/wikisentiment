@@ -60,20 +60,20 @@ if __name__ == '__main__':
     entries = []
     for ent in cursor:
         if not ent.has_key('labels'):
-            print >>sys.stderr, 'skip %s' % ent['entry']['rev_id']
+            print >>sys.stderr, 'skip %s' % ent['entry']['id']
             continue
         vec = {}
         for (x,y) in ent['vector'].items():
             vec[int(x)] = float(y)
         if len(vec.items()) == 0:
-            print >>sys.stderr, 'empty %s' % ent['entry']['rev_id']
+            print >>sys.stderr, 'empty %s' % ent['entry']['id']
             #continue
         vectors.append(vec)
         entries.append(ent)
         for (name,value) in ent['labels'].items():
             labels.setdefault(name, []).append(value if 1 else -1)
         if options.verbose:
-            print >>sys.stderr, str(ent['entry']['rev_id'])
+            print >>sys.stderr, str(ent['entry']['id'])
 
     if options.verbose:
         print >>sys.stderr, 'vectors loaded %s' % len(vectors)

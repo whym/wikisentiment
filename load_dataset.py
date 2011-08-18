@@ -63,7 +63,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--field', metavar='COLUMN',
                         dest='revfield', type=int, default=2,
-                        help='column that contains revision IDs')
+                        help='column that contains IDs')
     parser.add_argument('-l', '--labels', metavar='COLUMNS',
                         dest='labels', type=lambda x: [int(y)-1 for y in x.split(',')], default=None,
                         help='columns that contain labels (a label is 0 or 1)')
@@ -135,8 +135,8 @@ if __name__ == '__main__':
     if not options.overwrite:
         # get existing entries
         existings = {}
-        for x in db.find({'entry.rev_id': {'$exists': True}, 'entry.content': {'$exists': True}}, {'entry.rev_id':1, 'entry.content':1}):
-            existings[x['entry']['rev_id']] = True
+        for x in db.find({'entry.id.rev_id': {'$exists': True}, 'entry.content': {'$exists': True}}, {'entry.id.rev_id':1, 'entry.content':1}):
+            existings[x['entry']['id']['rev_id']] = True
         table = filter(lambda x: not existings.has_key(int(x[options.revfield])), table)
 
     while len(table) > 0:
@@ -150,8 +150,8 @@ if __name__ == '__main__':
                 if lab != None:
                     labels[lab] = bool(int(cols[i]))
             revid = int(cols[options.revfield])
-            ent = {'entry': {'rev_id': revid,
-                             }}
+            ent = {'entry': {'id': {'rev_id': revid,
+                             }}}
             if options.labels != None:
                 ent.update({'labels': labels})
             rev2entry[revid] = ent
@@ -184,7 +184,7 @@ if __name__ == '__main__':
             else:
                 ent['entry']['content'] = diffparse(rev.childNodes[0].childNodes[0].data)
         for x in rev2entry.values():
-            db.update({'entry.rev_id': x['entry']['rev_id']}, x, upsert=True, safe=True)
+            db.update({'entry.id.rev_id': x['entry']['id']['rev_id']}, x, upsert=True, safe=True)
         time.sleep(options.wait)
 
 

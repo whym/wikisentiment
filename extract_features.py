@@ -79,4 +79,4 @@ if __name__ == '__main__':
         ent['features'] = features
         ret = db.save(ent, safe=True)
         if options.verbose:
-            print ent['entry']['rev_id']
+            print ent['entry']['id']
