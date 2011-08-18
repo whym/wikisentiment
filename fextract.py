@@ -10,7 +10,7 @@ def extract_contents(ent):
         try:
             yield(name, ext(ent))
         except KeyError:
-            print >>sys.stderr, 'empty', name, ent
+            print >>sys.stderr, 'no attribute', name, ent
 
 def longest_subsequence(x, y):
     l = len(y)

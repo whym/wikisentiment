@@ -93,7 +93,7 @@ if __name__ == '__main__':
 
     writer = csv.writer(options.output, delimiter='\t')
     if options.aggregate:
-        writer.writerow([unicode(x) for x in ['label', 'id'] + [x[0] for x in labels] + ['diff', 'snippet']])
+        writer.writerow([unicode(x) for x in ['id'] + [x[0] for x in labels] + ['diff', 'snippet']])
     else:
         writer.writerow([unicode(x) for x in ['id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
     pn_tuple = namedtuple('pn', 'p n')
@@ -124,14 +124,14 @@ if __name__ == '__main__':
             revid = vectors[i][1]['id']['rev_id'] if vectors[i][1]['id'].has_key('rev_id') else None
             link = 'http://enwp.org/?diff=prev&oldid=%s' % revid
             ls = [lname,
-                  revid,
+                  repr(vectors[i][1]['id']),
                   bool(pred),
                   labs[i],
                   '%4.3f' % max(val[i]),
                   res,
                   '=HYPERLINK("%s","%s")' % (link,link),
                   '"' + (' '.join(vectors[i][1]['content']['added'])[0:options.snippetlen]) + '"' if vectors[i][1].has_key('content') else '(empty)']
-            output.setdefault(vectors[i][1]['id'],[]).append(ls)
+            output.setdefault(repr(vectors[i][1]['id']),[]).append(ls)
         numcorrect = pn.p[True] + pn.n[True]
         numwrong   = pn.p[False] + pn.n[False]
         if options.verbose:
