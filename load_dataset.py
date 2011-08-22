@@ -20,6 +20,12 @@ from datetime import datetime
 global idbase
 idbase = 0
 
+def int_if(x):
+    try:
+        return int(x)
+    except ValueError:
+        return x
+
 def slices(ls, size=2):
     n = int(float(len(ls)) / size + 0.5)
     return map(lambda x: ls[x*size:x*size+size], xrange(0, n))
@@ -64,16 +70,13 @@ def get_revisions(revs):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--id-field', metavar='COLUMN',
-                        dest='idfield', type=int, default=None,
-                        help='column that contains IDs')
+    parser.add_argument('-i', '--id-fields', metavar='COLUMNS',
+                        dest='idfields', type=lambda x: [int(y)-1 for y in x.split(',')], default=None,
+                        help='columns that contain labels (a label is 0 or 1)')
     parser.add_argument('-t', '--text-field', metavar='COLUMN',
                         dest='textfield', type=int, default=None,
                         help='column that contains text')
-    parser.add_argument('-I', '--id-type', metavar='STR',
-                        dest='idtype', type=str, choices=['rev_id', 'wikilove_id', 'auto_id'], default='auto_id',
-                        help='')
-    parser.add_argument('-l', '--labels', metavar='COLUMNS',
+    parser.add_argument('-l', '--label-fields', metavar='COLUMNS',
                         dest='labels', type=lambda x: [int(y)-1 for y in x.split(',')], default=None,
                         help='columns that contain labels (a label is 0 or 1)')
     parser.add_argument('-D', '--delimiter', metavar='CHARACTER',
@@ -114,9 +117,9 @@ if __name__ == '__main__':
     csv.field_size_limit(1000000000)
     table = list(csv.reader(open(options.input, 'rU'), delimiter=options.delimiter))
     header = []
-    if options.labels != None:
+    if options.labels != None or options.idfields != None:
         header = [None for x in xrange(0, len(table[0]))]
-        for c in options.labels:
+        for c in options.labels + options.idfields:
             header[c] = table[0][c]
         table = table[1:]
     table_size = len(table)
@@ -136,17 +139,22 @@ if __name__ == '__main__':
     # put them into MongoDB (raw information is put into the "entry" attribute)
     db = collection['talkpage_diffs_raw']
 
-    if options.idfield != None:
-        options.idfield -= 1
+    if options.idfields != None:
         digits = re.compile('\d+')
-        table = filter(lambda x: digits.match(x[options.idfield]), table)
+        table = filter(lambda x: reduce(lambda s,y: s and y, [digits.match(x[i]) for i in options.idfields]), table)
 
-    if not options.overwrite and options.idfield != None:
+    if options.overwrite and options.idfields != None:
         # get existing entries
         existings = {}
-        for x in db.find({'entry.id.'+options.idtype: {'$exists': True}, 'entry.content': {'$exists': True}}, {'entry.id.'+options.idtype:1, 'entry.content':1}):
-            existings[x['entry']['id'][options.idtype]] = True
-        table = filter(lambda x: not existings.has_key(int(x[options.idfield])), table)
+        query = {}
+        for i in options.idfields:
+            query['entry.id.' + header[i]] = {'$exists': True}
+        query['entry.content'] = {'$exists': True}
+        for x in db.find(query, {'entry.id': 1, 'entry.content': 1}):
+            existings[tuple([x['entry']['id'][header[i]] for i in options.idfields])] = True
+        table = filter(lambda x: not existings.has_key(tuple([int_if(x[i]) for i in options.idfields])), table)
+    if options.overwrite and options.idfields == None:
+        print >>sys.stderr, 'overwrite requires idfields'
 
     def extract_entries(rows):
         for cols in rows:
@@ -154,13 +162,14 @@ if __name__ == '__main__':
             for (i,lab) in enumerate(header):
                 if lab != None and (cols[i] == '1' or cols[i] == '0'):
                     labels[lab] = bool(int(cols[i]))
-            if options.idfield:
-                id = int(cols[options.idfield])
+            ids = []
+            if options.idfields != None:
+                ids = [int_if(cols[i]) for i in options.idfields]
             else:
-                id = idbase
+                ids = [idbase]
             
             text = None
-            ent = {'entry': {'id': {options.idtype: id}}}
+            ent = {'entry': {'id': dict(zip([header[i] for i in options.idfields], ids))}}
             if options.labels != None and labels != {}:
                 ent.update({'labels': labels})
             ent['entry'].update({'content': {'added': [],
@@ -173,10 +182,10 @@ if __name__ == '__main__':
     if options.textfield:
         for (cols,ent) in extract_entries(table):
             idbase += 1
-            db.update({'entry.id.'+options.idtype: ent['entry']['id'][options.idtype]}, ent, upsert=True, safe=True)
+            db.update({'entry.id': ent['entry']['id']}, ent, upsert=True, safe=True)
             if options.verbose:
                 print >>sys.stderr, ent['entry']['id'], len(ent['entry']['content']['added']), ent
-        print >>sys.stderr, '%d entries added' % db.count()
+        print >>sys.stderr, '%d entries added' % len(table)
     else:
         while len(table) > 0:
             colslices = table[0:options.slice]
@@ -186,7 +195,7 @@ if __name__ == '__main__':
             for (cols,ent) in extract_entries(colslices):
                 revid = ent['entry']['id']['rev_id']
                 rev2entry[revid] = ent
-                rev2cols[int(cols[options.idfield])] = cols
+                rev2cols[revid] = cols
     
             # call API to get content etc
             revs = get_revisions([str(x) for x in rev2cols.keys()])
@@ -215,7 +224,7 @@ if __name__ == '__main__':
                 else:
                     ent['entry']['content'] = diffparse(rev.childNodes[0].childNodes[0].data)
             for x in rev2entry.values():
-                db.update({'entry.id.'+options.idtype: x['entry']['id'][options.idtype]}, x, upsert=True, safe=True)
+                db.update({'entry.id': x['entry']['id']}, x, upsert=True, safe=True)
             time.sleep(options.wait)
     
 
