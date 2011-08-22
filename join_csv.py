@@ -8,6 +8,12 @@ import argparse
 import sys
 import ast
 
+def int_if(x):
+    try:
+        return int(x)
+    except ValueError:
+        return x
+
 def join(table1, table2, j1, j2):
     table1 = sorted(table1, key=j1)
     table2 = sorted(table2, key=j2)
@@ -57,6 +63,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose',
                         dest='verbose', action='store_true', default=False,
                         help='turn on verbose message output')
+    parser.add_argument('-I', '--non-int-key',
+                        dest='nonint', action='store_true', default=False,
+                        help='')
     parser.add_argument('inputs', nargs='+')
     options = parser.parse_args()
 
@@ -74,5 +83,8 @@ if __name__ == '__main__':
     if options.header == True:
         writer.writerow(headers)
 
-    for cols in join(tables[0], tables[1], lambda x: int(x[options.j1-1]), lambda x: int(x[options.j2-1])):
+    key = int
+    if options.nonint:
+        key = int_if
+    for cols in join(tables[0], tables[1], lambda x: key(x[options.j1-1]), lambda x: key(x[options.j2-1])):
         writer.writerow(cols)
