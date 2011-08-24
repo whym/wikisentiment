@@ -1,4 +1,3 @@
-
 =====================
 WikiSentiment
 =====================
@@ -59,6 +58,16 @@ Testing:
 
 # Load the model and construct a classifier.
 # For each entry, output it and the label predicted by the classifier.
+
+Requirements
+==============================
+
+* urllib2
+* pymongo
+* nltk (wordnet)
+* murmur
+* liblinear, liblinearutil
+
 
 Todo
 ==============================

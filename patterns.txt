@@ -1,0 +1,16 @@
+WIKI_WP_COLON	\[\[(wp|WP|wikipedia|Wikipedia):(.*?)[\|\]]	#expand&binary
+WIKI_FILE	\[\[[fF]ile:(.*?)\]\]	expand
+WIKI_IMAGE	\[\[[iI]mage:(.*?)\]\]	expand
+WIKI_HELP_COLON	\[\[(help|Help):(.*?)[\|\]]	#expand&binary
+WIKI_TMPL	\{\{(.*?)[\|\}]	#expand&binary
+WIKI_TMPLONLY	^\{\{.*\}\}$
+WIKI_TMPLLINK	[tT]emplate:
+WIKI_WIKIPROJECT	[wW]iki( |)[pP]roject
+WIKI_REDIRECT	\#(redirect|REDIRECT)
+WIKI_DELETION	\[\[Wikipedia\:(Articles for deletion|Proposed deletion)\|
+TERM_VANDAL	([vV]andal|VANDAL)
+TERM_BLOCK	([bB]lock|BLOCK)
+TERM_PUPPET	(sockpuppet|sock puppet|Sockpuppet|Sock puppet)
+#TERM_WELCOME_T	Thank you for your contributions
+TERM_KEYWORDS	(I\ propose|respond|discuss|experimenting|Thanks|Please\ see|learn\ more|contributing|your\ edits|attributed|credible|I\ hope|helps|I\ hope|helpful|you\ enjoy|I\ hope|Wikipedian|need\ help|ask\ me|Thanks\ for|Please\ go\ to|Welcome|useful\ links|required|Hope\ this\ helps|reliable|notability|Thanks|If\ you|enjoy\ contributing|get\ help|\{\{welcome\}\}|I'd\ suggest|Thanks\ for\ asking|main\ reason|Thanks\ for\ adding|wondering|newcomers|deleted|copyright|verify|image\ use\ policy|Thanks\ in\ advance|Could\ you|you\ may|violating|WP:SOCK|WP:3RR|WP:AFD|be\ careful|speedy|review|blocked|policies|you\ uploaded|listed|deleted|Wikipedia:Images\ and\ media\ for\ deletion|Please\ look|we\ could\ really\ use|good|Nice\ work|good\ copyediting|:\)|wikipedians|Thank\ you\ for\ your\ contributions|blocked|you\ may\ be|if\ you\ continue|unconstructive\ edits|Please\ stop|Keep\ in\ mind|please\ don't|Keep\ in\ mind|please\ stop|verify|cited\ source|Hopefully|incorrect|arrogant|revert|How\ to|tutorial|here\ are|ask|question|Thanks|your\ hard\ work|should\ be|PLEASE|insult|disturbing|Nice\ work|copyediting|yourself|great\ work|your\ contributions|disagreed|dislike|better\ use|bitter|Hope this helps|[yY]ou might have|Please be aware|I suggest|Cheers|[bB]arnstar)	expand
+# TERM_KEYWORDS	(I\ propose|respond|discuss|experimenting|Thanks|Please\ see|learn\ more|contributing|your\ edits|attributed|credible|I\ hope|helps|I\ hope|helpful|you\ enjoy|I\ hope|Wikipedian|need\ help|ask\ me|Thanks\ for|Please\ go\ to|Welcome|useful\ links|required|Hope\ this\ helps|reliable|notability|Thanks|If\ you|enjoy\ contributing|get\ help|\{\{welcome\}\}|I'd\ suggest|Thanks\ for\ asking|main\ reason|Thanks\ for\ adding|wondering|newcomers|deleted|copyright|verify|image\ use\ policy|Thanks\ in\ advance|Could\ you|you\ may|violating|WP:SOCK|WP:3RR|WP:AFD|be\ careful|speedy|review|blocked|policies|you\ uploaded|listed|deleted|Wikipedia:Images\ and\ media\ for\ deletion|Please\ look|we\ could\ really\ use|good|Nice\ work|good\ copyediting|:\)|wikipedians|Thank\ you\ for\ your\ contributions|blocked|you\ may\ be|if\ you\ continue|unconstructive\ edits|Please\ stop|Keep\ in\ mind|please\ don't|Keep\ in\ mind|please\ stop|verify|cited\ source|Hopefully|incorrect|arrogant|revert|How\ to|tutorial|here\ are|ask|question|Thanks|your\ hard\ work|should\ be|PLEASE|insult|disturbing|Nice\ work|copyediting|yourself|great\ work|your\ contributions|disagreed|dislike|better\ use|bitter)	expand

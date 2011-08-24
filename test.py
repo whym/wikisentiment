@@ -8,23 +8,26 @@ import argparse
 import urllib2
 import time
 import murmur
-import liblinear
-import liblinearutil
+import liblinear.linear
+import liblinear.linearutil
 import ast
-
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from xml.dom import minidom
+import tempfile
+from collections import namedtuple
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--prefix', metavar='FILE',
-                      dest='prefix', type=str, default='output_',
-                      help='')
     parser.add_argument('-f', '--find', metavar='QUERY',
-                        dest='find', type=str, default=None,
+                        dest='find', type=str, default='{}',
+                        help='')
+    parser.add_argument('-o', '--output', metavar='FILE',
+                        dest='output', type=lambda x: open(x, 'w'), default=sys.stdout,
+                        help='')
+    parser.add_argument('-l', '--snippet-len', metavar='N',
+                        dest='snippetlen', type=int, default=50,
+                        help='')
+    parser.add_argument('-m', '--model', metavar='QUERY',
+                        dest='model', type=str, default='{}',
                         help='')
     parser.add_argument('-d', '--database', metavar='NAME',
                         dest='database', type=unicode, default='wikisentiment',
@@ -35,6 +38,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose',
                         dest='verbose', action='store_true', default=False,
                         help='turn on verbose message output')
+    parser.add_argument('-a', '--aggregate',
+                        dest='aggregate', action='store_true', default=False,
+                        help='aggregate multi-labeled predictions with id')
     options = parser.parse_args()
 
     # establish MongoDB connection
@@ -47,57 +53,102 @@ if __name__ == '__main__':
     else:
         collection = pymongo.database.Database(master, options.database)
 
+    # load models for each label
+    db = collection['models']
+    models = {}
+    for model in db.find(ast.literal_eval(options.model)):
+        tmp = tempfile.mktemp(prefix=model['label'].replace('/','_'))
+        f = open(tmp, 'w')
+        f.write(model['raw_model'])
+        models[model['label']] = liblinear.linearutil.load_model(tmp)
+        f.close()
+
     # contruct the testing set from 'entry's in the MongoDB
+    # construct vectors for libsvm
     db = collection['talkpage_diffs_raw']
     query = {'vector': {'$exists': True}}
-    if options.find != None:
-        query.update(ast.literal_eval(options.find))
+    query.update(ast.literal_eval(options.find))
     cursor = db.find(query)
     print >>sys.stderr, 'labeld examples: %s out of %s' % (cursor.count(), db.count())
 
-    if options.prefix.endswith('.model'):
-        options.prefix = options[0:options.prefix.index('.model')] + '_'
-    if not options.prefix.endswith('_'):
-        options.prefix += '_'
-
-
-    cursor = [x for x in cursor]
-
-    labelset = set()
-    for x in cursor:
-        if x.has_key('labels'):
-            labelset.update(x['labels'])
-
-    # load models for each label
-    models = {}
-    for l in labelset:
-        models[l] = liblinearutil.load_model(options.prefix + l + '.model')
-
-    # construct vectors for libsvm
     vectors = []
     labels = {}
+    for x in models.keys():
+        labels[x] = []
     for ent in cursor:
-        if not ent.has_key('labels'):
-            print >>sys.stderr, 'skip ' + ent['entry']['rev_id']
-            continue
-        for (name,value) in ent['labels'].items():
-            labels.setdefault(name, []).append(value if 1 else -1)
+        for name in labels.keys():
+            value = None
+            if ent.has_key('labels') and ent['labels'].has_key(name):
+                value = ent['labels'][name] if 1 else -1
+            labels.setdefault(name, []).append(value)
         vec = {}
         for (x,y) in ent['vector'].items():
             vec[int(x)] = float(y)
-        vectors.append((vec, ent['entry']['rev_id']))
+        vectors.append((vec, ent['entry']))
 
+    for (name,vals) in labels.items():
+        assert len(vectors) == len(vals), [len(vectors), len(vals), name]
+
+    labels = sorted(labels.items(), key=lambda x: x[0])
+
+    writer = csv.writer(options.output, delimiter='\t')
+    if options.aggregate:
+        writer.writerow([unicode(x) for x in ['id'] + [x[0] for x in labels] + ['diff', 'snippet']])
+    else:
+        writer.writerow([unicode(x) for x in ['id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
+    pn_tuple = namedtuple('pn', 'p n')
     vecs = map(lambda x: x[0], vectors)
-    for (lname, labs) in labels.items():
+    output = {}
+    for (lname, labs) in labels:
         m = models[lname]
         if m == None:
             print >>sys.stderr, lname
             continue
         print lname + ': '
 
-        lab,acc,val = liblinearutil.predict(labs, vecs, m)
+        lab,acc,val = liblinear.linearutil.predict(labs, vecs, m, '-b 1')
 
-        # print failure cases
+        # print performances and failure cases
+        pn = pn_tuple({True: 0, False: 0},
+                      {True: 0, False: 0})
         for (i,pred) in enumerate(lab):
-            if pred != labs[i]:
-                print vectors[i][1]
+            ok = bool(pred) == labs[i]
+            res = 'Yes' if ok else 'No'
+            if labs[i] == None:
+                res = 'Unknown'
+            else:
+                if pred > 0:
+                    pn.p[ok] += 1
+                else:
+                    pn.n[ok] += 1
+            revid = vectors[i][1]['id']['rev_id'] if vectors[i][1]['id'].has_key('rev_id') else None
+            link = 'http://enwp.org/?diff=prev&oldid=%s' % revid
+            ls = [lname,
+                  repr(vectors[i][1]['id']),
+                  bool(pred),
+                  labs[i],
+                  '%4.3f' % max(val[i]),
+                  res,
+                  '=HYPERLINK("%s","%s")' % (link,link),
+                  '"' + (' '.join(vectors[i][1]['content']['added'])[0:options.snippetlen]) + '"' if vectors[i][1].has_key('content') else '(empty)']
+            output.setdefault(repr(vectors[i][1]['id']),[]).append(ls)
+        numcorrect = pn.p[True] + pn.n[True]
+        numwrong   = pn.p[False] + pn.n[False]
+        if options.verbose:
+            print ' accuracy  = %f (%d/%d)' % (float(numcorrect) / (numcorrect + numwrong) if numcorrect + numwrong > 0 else float('nan'),
+                                               numcorrect,
+                                               (numcorrect + numwrong))
+            prec = float(pn.p[True]) / sum(pn.p.values()) if sum(pn.p.values()) != 0 else float('nan')
+            reca = float(pn.p[True]) / (pn.p[True] + pn.n[False]) if pn.p[True] + pn.n[False] != 0 else float('nan')
+            print ' precision = %f' % prec
+            print ' recall    = %f' % reca
+            print ' fmeasure  = %f' % (1.0 / (0.5/prec + 0.5/reca)) if prec != 0 and reca != 0 else float('nan')
+            print '', pn, (pn.p[True] + pn.p[False] + pn.n[True] + pn.n[False])
+
+    if options.aggregate:
+        for (id, s) in output.items():
+            writer.writerow([unicode(x).encode('utf-8') for x in (s[0][1:2] + [unicode(x[2]) for x in s] + s[0][-2:])])
+    else:
+        for (id, s) in output.items():
+            for ls in s:
+                writer.writerow([unicode(x).encode('utf-8') for x in ls])

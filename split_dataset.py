@@ -72,5 +72,6 @@ if __name__ == '__main__':
     print >>sys.stderr, 'target entries: %s out of %s' % (cursor.count(), db.count())
     numbers = splits([int(x) for x in options.split.split(',')], cursor.count())
     random.shuffle(numbers)
-    for (n,ent) in enumerate(cursor):
-        print (ent['entry']['rev_id'], db.update({'entry.rev_id': ent['entry']['rev_id']}, {'$set': {'internal.slice': numbers[n]}}, safe=True))
+    assert cursor.count() == len(numbers), [cursor.count(), len(number)]
+    for (n,ent) in enumerate(sorted(cursor, key=lambda x: x['entry']['id'])):
+        print (numbers[n], str(ent['entry']['id']), db.update({'entry.id': ent['entry']['id']}, {'$set': {'internal.slice': numbers[n]}}, safe=True))
