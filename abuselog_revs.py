@@ -10,6 +10,9 @@ import csv
 import urllib2
 import re
 from datetime import datetime, timedelta
+from collections import namedtuple
+
+abuselog_t = namedtuple('AbuseLog', 'id filter userid username action actions var_dump timestamp namespace title')
 
 def parse_wikidate(x):
     return datetime.strptime(str(x), '%Y%m%d%H%M%S')
@@ -17,20 +20,6 @@ def parse_wikidate(x):
 def format_wikidate(x):
     return datetime.strftime(x, '%Y%m%d%H%M%S')
 
-def title2pageid(cursor, title, namespace=0):
-    cursor.execute('''
-          SELECT p.page_id, page_is_redirect
-            FROM page p
-            WHERE
-              p.page_title = ?
-              AND p.page_namespace = ?
-        ;
-    ''', (title,namespace))
-    ls = list(cursor)
-    if len(ls) == 0:
-        return (None,None)
-    return tuple(ls[0])
-    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output', metavar='FILE',
@@ -61,12 +50,11 @@ if __name__ == '__main__':
         ;
     ''', (options.filternum,))
 
-    ls = list(cursor)
-    anons = filter(lambda x: x[2] == 0, ls)
-    regis = filter(lambda x: x[2] != 0, ls) 
+    ls = [abuselog_t(*x) for x in list(cursor)]
+    anons = filter(lambda x: x.userid == 0, ls)
+    regis = filter(lambda x: x.userid != 0, ls) 
     output = []
     for tup in regis:
-        _,_,senderid,sendername,_,_,_,timestamp = tup[0:8]
         cursor.execute('''
            SELECT r.rev_id
              FROM revision r
@@ -74,15 +62,14 @@ if __name__ == '__main__':
                AND r.rev_timestamp BETWEEN ? AND ?
            LIMIT 1
            ;
-        ''', (senderid,
-              format_wikidate(parse_wikidate(timestamp)+timedelta(seconds=-1)),
-              format_wikidate(parse_wikidate(timestamp)+timedelta(seconds=1))))
+        ''', (tup.userid,
+              format_wikidate(parse_wikidate(tup.timestamp)+timedelta(seconds=-1)),
+              format_wikidate(parse_wikidate(tup.timestamp)+timedelta(seconds=1))))
         ls = list(cursor)
         if ls == None or len(ls) == 0 or len(ls[0]) == 0:
             ls = [(None,)]
-        output.append(list(ls[0] + tup))
+        output.append((ls[0][0], tup))
     for tup in anons:
-        _,_,senderid,sendername,_,_,_,timestamp = tup[0:8]
         cursor.execute('''
            SELECT r.rev_id
              FROM revision r
@@ -90,14 +77,13 @@ if __name__ == '__main__':
                AND r.rev_timestamp BETWEEN ? AND ?
            LIMIT 1
            ;
-        ''', (sendername,
-              format_wikidate(parse_wikidate(timestamp)+timedelta(seconds=-1)),
-              format_wikidate(parse_wikidate(timestamp)+timedelta(seconds=1))))
+        ''', (tup.username,
+              format_wikidate(parse_wikidate(tup.timestamp)+timedelta(seconds=-1)),
+              format_wikidate(parse_wikidate(tup.timestamp)+timedelta(seconds=1))))
         ls = list(cursor)
         if ls == None or len(ls) == 0 or len(ls[0]) == 0:
             ls = [(None,)]
-        output.append(list(ls[0] + tup))
-    for tup in output:
-        rev,_,_,senderid,sendername,_,_,_,timestamp,ns,title = tup[0:11]
-        options.output.write('\t'.join([str(x) for x in [rev,sendername,senderid,timestamp,ns,title]]))
+        output.append((ls[0][0], tup))
+    for (rev,tup) in output:
+        options.output.write('\t'.join([str(x) for x in [rev,tup.username,tup.userid,tup.timestamp,tup.namespace,tup.title]]))
         options.output.write('\n')
