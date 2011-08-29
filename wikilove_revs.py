@@ -10,7 +10,7 @@ import csv
 import re
 from collections import namedtuple
 from datetime import datetime, timedelta
-from myutils import parse_wikidate, format_wikidate, wikilove_t
+from myutils import *
 
 wikilovelog_t = namedtuple('WikiLoveLog', 'id timestamp senderid senderreg sendercount receiverid receiverreg receivercount wltype subject message')
 
@@ -46,14 +46,13 @@ def get_entries(cursor, start, end, window, limit=100000):
         if len(ls) >= 2:
             print >>sys.stderr, '%s: 2 or more candidates: %s' % (tup.id, ls)
             ls = [(None,)]
-        output.append(wikilove_t(rev_id=ls[0][0],
-                                 sender_id=tup.senderid,
-                                 sender_name=None,
-                                 receiver_id=tup.receiverid,
-                                 receiver_name=None,
-                                 timestamp=tup.timestamp,
-                                 others=tup))
-    return output
+        yield wikilove_t(rev_id=ls[0][0],
+                         sender_id=tup.senderid,
+                         sender_name=None,
+                         receiver_id=tup.receiverid,
+                         receiver_name=None,
+                         timestamp=tup.timestamp,
+                         others=tup)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -72,18 +71,12 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--db', metavar='DBNAME', required=True,
                         dest='db', type=str,
                         help='target wiki name')
+    parser.add_argument('-H', '--host', metavar='HOST',
+                        dest='host', type=str, default='',
+                        help='mysql host name')
     options = parser.parse_args()
-    options.db = options.db.replace('_','-')
 
-    host = options.db + '.rrdb.toolserver.org'
-    conn = oursql.connect(host = host,
-                          read_default_file=os.path.expanduser('~/.my.cnf'),
-                          db = options.db.replace('-','_'),
-                          charset=None,
-                          use_unicode=False)
-
-    cursor = conn.cursor()
-    output = get_entries(cursor, options.start, options.end, options.window, 1000000)
+    cursor = get_mysql_connection(options.host, options.db).cursor()
     writer = csv.writer(options.output, delimiter='\t')
-    for ent in output:
+    for ent in get_entries(cursor, options.start, options.end, options.window, 1000000):
         writer.writerow([unicode(x.decode('utf-8') if type(x) == str else x).encode('utf-8') for x in ent[0:-1]+ent[-1]])

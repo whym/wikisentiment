@@ -3,21 +3,9 @@
 
 import csv
 import sys
-import pymongo
 import argparse
-import urllib2
-import time
-import murmur
-import liblinear.linear
-import liblinear.linearutil
 import ast
-import tempfile
-from collections import namedtuple
-
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from xml.dom import minidom
+from myutils import pn_t
 
 if __name__ == '__main__':
 
@@ -47,8 +35,6 @@ if __name__ == '__main__':
     
     options = parser.parse_args()
 
-    pn_tuple = namedtuple('pn', 'p n')
-
     # load raw table of coded examples
     csv.field_size_limit(1000000000)
     table = []
@@ -58,8 +44,8 @@ if __name__ == '__main__':
     pns = {}
     for cols in table:
         lab,pred,code = [cols[x] for x in [options.label, options.pred, options.code]]
-        pn = pns.setdefault(lab, pn_tuple({True: 0, False: 0},
-                                          {True: 0, False: 0}))
+        pn = pns.setdefault(lab, pn_t({True: 0, False: 0},
+                                      {True: 0, False: 0}))
         if code == options.ignore:
             None
         else:

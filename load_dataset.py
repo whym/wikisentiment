@@ -104,14 +104,7 @@ if __name__ == '__main__':
     options = parser.parse_args()
 
     # establish MongoDB connection
-    options.hosts = options.hosts.split(',')
-    master = pymongo.Connection(options.hosts[0])
-    slaves = [pymongo.Connection(x) for x in options.hosts[1:]]
-    collection = None
-    if slaves != []:
-        collection = pymongo.MasterSlaveConnection(master, slaves)[options.database]
-    else:
-        collection = pymongo.database.Database(master, options.database)
+    collection = get_mongodb_collection(options.hosts, options.database)
 
     # load raw table of coded examples
     csv.field_size_limit(1000000000)

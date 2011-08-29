@@ -3,22 +3,37 @@
 
 import csv
 import sys
-import pymongo
 import argparse
-import urllib2
 import time
 import murmur
 
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from xml.dom import minidom
-
 from fextract import *
+import myutils
 
 def slices(ls, size=2):
     n = int(float(len(ls)) / size + 0.5)
     return map(lambda x: ls[x*size:x*size+size], xrange(0, n))
+
+def extract_features(ent, extractors=[SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt', threshold=0.2),
+                                      WikiPatternExtractor(),
+                                      NgramExtractor(n=2),
+                                      NgramExtractor(n=2, lowercase=True),
+                                      NgramExtractor(n=1),
+                                      NgramExtractor(n=1, lowercase=True),
+                                      ]):
+    features = {}
+    for fx in extractors:
+        features[fx.name()] = fx.extract(ent)
+    return features
+
+def extract_vector(features, bits):
+    vector = {}
+    for (fset,vals) in features.items():
+        for (f,v) in vals.items():
+            h = murmur.string_hash('%s_%s' % (fset, f.encode('utf-8')))
+            h = h & (2 ** bits - 1)
+            vector[h + 1] = v
+    return vector
 
 if __name__ == '__main__':
 
@@ -41,38 +56,15 @@ if __name__ == '__main__':
     options = parser.parse_args()
 
     # establish MongoDB connection
-    options.hosts = options.hosts.split(',')
-    master = pymongo.Connection(options.hosts[0])
-    slaves = [pymongo.Connection(x) for x in options.hosts[1:]]
-    collection = None
-    if slaves != []:
-        collection = pymongo.MasterSlaveConnection(master, slaves)[options.database]
-    else:
-        collection = pymongo.database.Database(master, options.database)
+    collection = myutils.get_mongodb_collection(options.hosts, options.database)
 
     # for each 'entry' in the MongoDB, extract features and put them to 'features'
-    extractors = [SentiWordNetExtractor('SentiWordNet_3.0.0_20100908.txt', threshold=0.2),
-                  WikiPatternExtractor(),
-                  NgramExtractor(n=2),
-                  NgramExtractor(n=2, lowercase=True),
-                  NgramExtractor(n=1),
-                  NgramExtractor(n=1, lowercase=True),
-                  ]
     db = collection['talkpage_diffs_raw']
     cursor = db.find()
     entries = []
     for ent in cursor:
-        features = {}
-        for fx in extractors:
-            features[fx.name()] = fx.extract(ent)
-        entries.append((ent,features))
-    for (ent,features) in entries:
-        vector = {}
-        for (fset,vals) in features.items():
-            for (f,v) in vals.items():
-                h = murmur.string_hash('%s_%s' % (fset, f.encode('utf-8')))
-                h = h & (2 ** options.bits - 1)
-                vector[unicode(h + 1)] = v
+        features = extract_features(ent)
+        vector = myutils.map_key_dict(unicode, extract_vector(features, options.bits))
         # print db.find({'entry.rev_id': ent['entry']['rev_id']}).count()#!
         # print vector,features,ent#!
         ent['vector'] = vector

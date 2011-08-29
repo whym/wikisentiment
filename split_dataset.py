@@ -3,19 +3,10 @@
 
 import csv
 import sys
-import pymongo
 import argparse
-import urllib2
 import time
-import murmur
-import liblinear
 import ast
 import random
-
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from xml.dom import minidom
 
 def splits(rates, size, substs=xrange(0,2**16)):
     segsize = size / sum(rates)
@@ -57,14 +48,7 @@ if __name__ == '__main__':
     random.seed(options.seed)
 
     # establish MongoDB connection
-    options.hosts = options.hosts.split(',')
-    master = pymongo.Connection(options.hosts[0])
-    slaves = [pymongo.Connection(x) for x in options.hosts[1:]]
-    collection = None
-    if slaves != []:
-        collection = pymongo.MasterSlaveConnection(master, slaves)[options.database]
-    else:
-        collection = pymongo.database.Database(master, options.database)
+    collection = myutils.get_mongodb_collection(options.hosts, options.database)
 
     # contruct the training set from 'entry's in the MongoDB
     db = collection['talkpage_diffs_raw']

@@ -3,20 +3,13 @@
 
 import csv
 import sys
-import pymongo
 import argparse
-import urllib2
 import time
-import murmur
 import liblinear.linear
 import liblinear.linearutil
 import ast
 import tempfile
-
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
-from xml.dom import minidom
+import myutils
 
 if __name__ == '__main__':
 
@@ -39,14 +32,7 @@ if __name__ == '__main__':
     options = parser.parse_args()
 
     # establish MongoDB connection
-    options.hosts = options.hosts.split(',')
-    master = pymongo.Connection(options.hosts[0])
-    slaves = [pymongo.Connection(x) for x in options.hosts[1:]]
-    collection = None
-    if slaves != []:
-        collection = pymongo.MasterSlaveConnection(master, slaves)[options.database]
-    else:
-        collection = pymongo.database.Database(master, options.database)
+    collection = myutils.get_mongodb_collection(options.hosts, options.database)
 
     # contruct the training set from 'entry's in the MongoDB
     db = collection['talkpage_diffs_raw']
@@ -62,9 +48,7 @@ if __name__ == '__main__':
         if not ent.has_key('labels'):
             print >>sys.stderr, 'skip %s' % ent['entry']['id']
             continue
-        vec = {}
-        for (x,y) in ent['vector'].items():
-            vec[int(x)] = float(y)
+        vec = myutils.map_key_dict(int, ent['vector'])
         if len(vec.items()) == 0:
             print >>sys.stderr, 'empty %s' % ent['entry']['id']
             #continue

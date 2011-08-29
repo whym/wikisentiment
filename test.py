@@ -3,16 +3,25 @@
 
 import csv
 import sys
-import pymongo
 import argparse
-import urllib2
-import time
-import murmur
 import liblinear.linear
 import liblinear.linearutil
 import ast
 import tempfile
 from collections import namedtuple
+import myutils
+from myutils import pn_t, entry_t
+
+def load_models(db, find):
+    models = {}
+    for model in db.find(find):
+        tmp = tempfile.mktemp(prefix=model['label'].replace('/','_'))
+        f = open(tmp, 'w')
+        f.write(model['raw_model'])
+        models[model['label']] = liblinear.linearutil.load_model(tmp)
+        f.close()
+    return models
+
 
 if __name__ == '__main__':
 
@@ -44,24 +53,10 @@ if __name__ == '__main__':
     options = parser.parse_args()
 
     # establish MongoDB connection
-    options.hosts = options.hosts.split(',')
-    master = pymongo.Connection(options.hosts[0])
-    slaves = [pymongo.Connection(x) for x in options.hosts[1:]]
-    collection = None
-    if slaves != []:
-        collection = pymongo.MasterSlaveConnection(master, slaves)[options.database]
-    else:
-        collection = pymongo.database.Database(master, options.database)
+    collection = myutils.get_mongodb_collection(options.hosts, options.database)
 
     # load models for each label
-    db = collection['models']
-    models = {}
-    for model in db.find(ast.literal_eval(options.model)):
-        tmp = tempfile.mktemp(prefix=model['label'].replace('/','_'))
-        f = open(tmp, 'w')
-        f.write(model['raw_model'])
-        models[model['label']] = liblinear.linearutil.load_model(tmp)
-        f.close()
+    models = load_models(collection['models'], ast.literal_eval(options.model))
 
     # contruct the testing set from 'entry's in the MongoDB
     # construct vectors for libsvm
@@ -81,10 +76,7 @@ if __name__ == '__main__':
             if ent.has_key('labels') and ent['labels'].has_key(name):
                 value = ent['labels'][name] if 1 else -1
             labels.setdefault(name, []).append(value)
-        vec = {}
-        for (x,y) in ent['vector'].items():
-            vec[int(x)] = float(y)
-        vectors.append((vec, ent['entry']))
+        vectors.append(entry_t(ent['entry'], ent['features'], myutils.map_key_dict(int, ent['vector'])))
 
     for (name,vals) in labels.items():
         assert len(vectors) == len(vals), [len(vectors), len(vals), name]
@@ -96,8 +88,7 @@ if __name__ == '__main__':
         writer.writerow([unicode(x) for x in ['id'] + [x[0] for x in labels] + ['diff', 'snippet']])
     else:
         writer.writerow([unicode(x) for x in ['id', 'predicted', 'coded', 'confidence', 'correct?', 'diff', 'snippet']])
-    pn_tuple = namedtuple('pn', 'p n')
-    vecs = map(lambda x: x[0], vectors)
+    vecs = map(lambda x: x.vector, vectors)
     output = {}
     for (lname, labs) in labels:
         m = models[lname]
@@ -109,8 +100,8 @@ if __name__ == '__main__':
         lab,acc,val = liblinear.linearutil.predict(labs, vecs, m, '-b 1')
 
         # print performances and failure cases
-        pn = pn_tuple({True: 0, False: 0},
-                      {True: 0, False: 0})
+        pn = pn_t({True: 0, False: 0},
+                  {True: 0, False: 0})
         for (i,pred) in enumerate(lab):
             ok = bool(pred) == labs[i]
             res = 'Yes' if ok else 'No'
@@ -121,17 +112,17 @@ if __name__ == '__main__':
                     pn.p[ok] += 1
                 else:
                     pn.n[ok] += 1
-            revid = vectors[i][1]['id']['rev_id'] if vectors[i][1]['id'].has_key('rev_id') else None
+            revid = vectors[i].raw['id']['rev_id'] if vectors[i].raw['id'].has_key('rev_id') else None
             link = 'http://enwp.org/?diff=prev&oldid=%s' % revid
             ls = [lname,
-                  repr(vectors[i][1]['id']),
+                  repr(vectors[i].raw['id']),
                   bool(pred),
                   labs[i],
                   '%4.3f' % max(val[i]),
                   res,
                   '=HYPERLINK("%s","%s")' % (link,link),
-                  '"' + (' '.join(vectors[i][1]['content']['added'])[0:options.snippetlen]) + '"' if vectors[i][1].has_key('content') else '(empty)']
-            output.setdefault(repr(vectors[i][1]['id']),[]).append(ls)
+                  '"' + (' '.join(vectors[i].raw['content']['added'])[0:options.snippetlen]) + '"' if vectors[i].raw.has_key('content') else '(empty)']
+            output.setdefault(repr(vectors[i].raw['id']),[]).append(ls)
         numcorrect = pn.p[True] + pn.n[True]
         numwrong   = pn.p[False] + pn.n[False]
         if options.verbose:
