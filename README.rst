@@ -61,13 +61,13 @@ Testing:
 
 Requirements
 ==============================
+Following python modules are required.
 
 * urllib2
 * pymongo
 * nltk (wordnet)
 * murmur
 * liblinear, liblinearutil
-
 
 Todo
 ==============================
