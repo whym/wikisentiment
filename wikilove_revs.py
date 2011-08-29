@@ -20,8 +20,9 @@ def get_entries(cursor, start, end, window, limit=100000):
             FROM wikilove_log l
           WHERE
             l.wll_timestamp BETWEEN ? AND ?
+          LIMIT ?
         ;
-    ''', (start, end))
+    ''', (start, end, limit))
 
     ls = [wikilovelog_t(*x) for x in list(cursor)]
     #anons = filter(lambda x: x.senderid == 0, ls) # wikilove_log contains no messages sent by anons (?)

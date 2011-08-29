@@ -21,8 +21,9 @@ def get_entries(cursor, start, end, window, limit=100000, filternum=423):
             WHERE a.afl_filter = ?
               AND a.afl_timestamp BETWEEN ? AND ?
               AND a.afl_action = "edit"
+            LIMIT ?
         ;
-    ''', (filternum, start, end))
+    ''', (filternum, start, end, limit))
 
     ls = [abuselog_t(*x) for x in list(cursor)]
     anons = filter(lambda x: x.userid == 0, ls)
