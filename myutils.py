@@ -19,8 +19,22 @@ def map_key_dict(mapper, dic):
         ret[mapper(x)] = y
     return ret
 
+def int_if(x):
+    try:
+        return int(x)
+    except ValueError:
+        return x
+
+def comment_out(line):
+    cstart = line.find('#')
+    if cstart >= 0:
+        cc = line.find('\\#')
+        if cstart == 0 or cc + 1 != cstart:
+            line = line[0:cstart]
+    return line
+
 def fraction_to_color_code(x):
-    return ('%02X' % int(255 - 255 * x))
+    return ('%02X' % int(255 * x))
 
 def parse_wikidate(x):
     return datetime.strptime(str(x), '%Y%m%d%H%M%S')

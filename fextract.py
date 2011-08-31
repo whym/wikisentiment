@@ -2,6 +2,7 @@ import csv
 import re
 import nltk
 import sys
+import myutils
 
 def extract_contents(ent):
     for (name, ext) in {'added':   lambda x: x['entry']['content']['added'],
@@ -44,13 +45,7 @@ class WikiPatternExtractor:
         self.patterns = {}
         self.patterns_expanded = {}
         for line in open(file):
-            cstart = line.find('#')
-            if cstart >= 0:
-                cc = line.find('\\#')
-                if cc + 1 != cstart:
-                    line = line[0:cstart]
-
-            line = line.strip()
+            line = myutils.comment_out(line).strip()
             if len(line) == 0:
                 continue
                 
