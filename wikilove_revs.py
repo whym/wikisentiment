@@ -14,15 +14,19 @@ from myutils import *
 
 wikilovelog_t = namedtuple('WikiLoveLog', 'id timestamp senderid senderreg sendercount receiverid receiverreg receivercount wltype subject message')
 
-def get_entries(cursor, start, end, window, limit=100000):
+def get_entries(cursor, start, end, window, limit=100000, newest=False):
+    order = ''
+    if newest:
+        order = 'ORDER BY l.wll_timestamp DESC'
     cursor.execute('''
           SELECT *
             FROM wikilove_log l
           WHERE
             l.wll_timestamp BETWEEN ? AND ?
+            %s
           LIMIT ?
         ;
-    ''', (start, end, limit))
+    ''' % (order), (start, end, limit))
 
     ls = [wikilovelog_t(*x) for x in list(cursor)]
     #anons = filter(lambda x: x.senderid == 0, ls) # wikilove_log contains no messages sent by anons (?)

@@ -14,7 +14,10 @@ from myutils import *
 
 abuselog_t = namedtuple('AbuseLog', 'id filter userid username action actions var_dump timestamp namespace title')
 
-def get_entries(cursor, start, end, window, limit=100000, filternum=423):
+def get_entries(cursor, start, end, window, limit=100000, filternum=423, newest=False):
+    order = ''
+    if newest:
+        order = 'ORDER BY a.afl_timestamp DESC'
     cursor.execute('''
           SELECT *
             FROM abuse_filter_log a
@@ -23,7 +26,7 @@ def get_entries(cursor, start, end, window, limit=100000, filternum=423):
               AND a.afl_action = "edit"
             LIMIT ?
         ;
-    ''', (filternum, start, end, limit))
+    ''' % (order), (filternum, start, end, limit))
 
     ls = [abuselog_t(*x) for x in list(cursor)]
     anons = filter(lambda x: x.userid == 0, ls)
