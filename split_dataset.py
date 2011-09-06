@@ -7,6 +7,7 @@ import argparse
 import time
 import ast
 import random
+import myutils
 
 def splits(rates, size, substs=xrange(0,2**16)):
     segsize = size / sum(rates)
