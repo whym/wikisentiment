@@ -83,10 +83,8 @@ class NgramExtractor:
             if self.lowercase:
                 s = uncapitalize(s)
             words = self.wordsegment.split(s)
-            for ng in nltk.ngrams(words, self.n):
-                ret['_'.join([cname]+list(ng))] = True
-                if len(ret) == 100:
-                    break
+            for ng in nltk.ngrams(words, self.n, pad_left=True, pad_right=True):
+                ret['_'.join([cname]+[x if x != None else '<>' for x in list(ng)])] = True
         return ret
     def name(self):
         return 'NgramExtractor|%(n)s|lc=%(lowercase)s' % self.__dict__
