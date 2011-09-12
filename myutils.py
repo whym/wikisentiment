@@ -34,7 +34,10 @@ def comment_out(line):
     return line
 
 def fraction_to_color_code(x):
-    return ('%02X' % int(255 * x))
+    try:
+        return ('%02X' % int(255 * x))
+    except ValueError:
+        return '00'
 
 def parse_wikidate(x):
     return datetime.strptime(str(x), '%Y%m%d%H%M%S')

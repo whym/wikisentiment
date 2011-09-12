@@ -8,8 +8,14 @@ import sys
 import csv
 import urllib2
 import re
-import liblinear.linear
-import liblinear.linearutil
+try:
+    import liblinear.linear
+    import liblinear.linearutil
+except ImportError:
+    import liblinear
+    import liblinearutil
+    liblinear.linearutil = liblinearutil
+    liblinear.linear = liblinear
 import ast
 import tempfile
 from datetime import datetime, timedelta
