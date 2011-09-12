@@ -89,6 +89,8 @@ Todo
 See also
 ==============================
 
+* http://meta.wikimedia.org/wiki/Research:Sentiment_analysis_tool_of_new_editor_interaction
+* http://meta.wikimedia.org/wiki/Research:Classifying_wikilove_messages
 * http://etherpad.wikimedia.org/neic
 
 .. Local variables:
