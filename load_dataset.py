@@ -9,22 +9,13 @@ import urllib2
 import time
 import re
 import ast
-
-from twisted.internet import reactor
-from twisted.web.client import Agent
-from twisted.web.http_headers import Headers
+import myutils
 from xml.dom import minidom
 from itertools import groupby
 from datetime import datetime
 
 global idbase
 idbase = 0
-
-def int_if(x):
-    try:
-        return int(x)
-    except ValueError:
-        return x
 
 def slices(ls, size=2):
     n = int(float(len(ls)) / size + 0.5)
@@ -104,7 +95,7 @@ if __name__ == '__main__':
     options = parser.parse_args()
 
     # establish MongoDB connection
-    collection = get_mongodb_collection(options.hosts, options.database)
+    collection = myutils.get_mongodb_collection(options.hosts, options.database)
 
     # load raw table of coded examples
     csv.field_size_limit(1000000000)
@@ -145,7 +136,7 @@ if __name__ == '__main__':
         query['entry.content'] = {'$exists': True}
         for x in db.find(query, {'entry.id': 1, 'entry.content': 1}):
             existings[tuple([x['entry']['id'][header[i]] for i in options.idfields])] = True
-        table = filter(lambda x: not existings.has_key(tuple([int_if(x[i]) for i in options.idfields])), table)
+        table = filter(lambda x: not existings.has_key(tuple([myutils.int_if(x[i]) for i in options.idfields])), table)
     if options.overwrite and options.idfields == None:
         print >>sys.stderr, 'overwrite requires idfields'
 
@@ -157,7 +148,7 @@ if __name__ == '__main__':
                     labels[lab] = bool(int(cols[i]))
             ids = []
             if options.idfields != None:
-                ids = [int_if(cols[i]) for i in options.idfields]
+                ids = [myutils.int_if(cols[i]) for i in options.idfields]
             else:
                 ids = [idbase]
             

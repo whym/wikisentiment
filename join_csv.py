@@ -7,12 +7,7 @@ import csv
 import argparse
 import sys
 import ast
-
-def int_if(x):
-    try:
-        return int(x)
-    except ValueError:
-        return x
+from myutils import int_if
 
 def join(table1, table2, j1, j2):
     table1 = sorted(table1, key=j1)
