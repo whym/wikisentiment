@@ -30,9 +30,13 @@ def extract_vector(features, bits):
     vector = {}
     for (fset,vals) in features.items():
         for (f,v) in vals.items():
-            h = murmur.string_hash('%s_%s' % (fset, f.encode('utf-8')))
-            h = h & (2 ** bits - 1)
-            vector[h + 1] = v
+            try:
+                h = murmur.string_hash('%s_%s' % (fset, f.encode('utf-8')))
+                h = h & (2 ** bits - 1)
+                vector[h + 1] = v
+            except UnicodeDecodeError, e:
+                print >>sys.stderr, '%s: %s' % (e, (f,v))
+                continue
     return vector
 
 if __name__ == '__main__':
