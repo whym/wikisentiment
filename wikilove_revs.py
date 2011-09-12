@@ -12,15 +12,17 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 from myutils import *
 
-wikilovelog_t = namedtuple('WikiLoveLog', 'id timestamp senderid senderreg sendercount receiverid receiverreg receivercount wltype subject message')
+wikilovelog_t = namedtuple('WikiLoveLog', 'id timestamp senderid senderreg sendercount receiverid receiverreg receivercount wltype subject message sendername receivername')
 
 def get_entries(cursor, start, end, window, limit=100000, newest=False):
     order = ''
     if newest:
         order = 'ORDER BY l.wll_timestamp DESC'
     cursor.execute('''
-          SELECT *
+          SELECT l.*, s.user_name, r.user_name
             FROM wikilove_log l
+             LEFT JOIN user s ON s.user_id = l.wll_sender
+             LEFT JOIN user r ON r.user_id = l.wll_receiver
           WHERE
             l.wll_timestamp BETWEEN ? AND ?
             %s
@@ -52,16 +54,20 @@ def get_entries(cursor, start, end, window, limit=100000, newest=False):
             ls = [(None,)]
         yield wikilove_t(rev_id=ls[0][0],
                          sender_id=tup.senderid,
-                         sender_name=None,
+                         sender_name=tup.sendername,
                          receiver_id=tup.receiverid,
-                         receiver_name=None,
+                         receiver_name=tup.receivername,
                          timestamp=tup.timestamp,
-                         others=tup)
+                         others=tup,
+                         message="\n".join([tup.subject,tup.message]))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output', metavar='FILE',
                         dest='output', type=lambda x: open(x, 'w'), default=sys.stdout,
+                        help='')
+    parser.add_argument('-l', '--limit', metavar='N',
+                        dest='limit', type=int, default=1000000,
                         help='')
     parser.add_argument('-w', '--window', metavar='SECS',
                         dest='window', type=int, default=10,
@@ -82,5 +88,5 @@ if __name__ == '__main__':
 
     cursor = get_mysql_connection(options.host, options.db).cursor()
     writer = csv.writer(options.output, delimiter='\t')
-    for ent in get_entries(cursor, options.start, options.end, options.window, 1000000):
+    for ent in get_entries(cursor, options.start, options.end, options.window, options.limit):
         writer.writerow([unicode(x.decode('utf-8') if type(x) == str else x).encode('utf-8') for x in ent[0:-1]+ent[-1]])

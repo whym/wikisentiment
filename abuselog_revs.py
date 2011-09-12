@@ -12,15 +12,16 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 from myutils import *
 
-abuselog_t = namedtuple('AbuseLog', 'id filter userid username action actions var_dump timestamp namespace title')
+abuselog_t = namedtuple('AbuseLog', 'id filter userid username action actions var_dump timestamp namespace title title_user_id')
 
 def get_entries(cursor, start, end, window, limit=100000, filternum=423, newest=False):
     order = ''
     if newest:
         order = 'ORDER BY a.afl_timestamp DESC'
     cursor.execute('''
-          SELECT *
+          SELECT a.*, u.user_id
             FROM abuse_filter_log a
+              LEFT JOIN user u ON u.user_name = a.afl_title
             WHERE a.afl_filter = ?
               AND a.afl_timestamp BETWEEN ? AND ?
               AND a.afl_action = "edit"
@@ -49,10 +50,11 @@ def get_entries(cursor, start, end, window, limit=100000, filternum=423, newest=
         yield wikilove_t(rev_id=ls[0][0],
                          sender_id=tup.userid,
                          sender_name=tup.username,
-                         receiver_id=None,
+                         receiver_id=tup.title_user_id,
                          receiver_name=tup.title,
                          timestamp=tup.timestamp,
-                         others=tup)
+                         others=tup,
+                         message=None)
     for tup in anons:
         cursor.execute('''
            SELECT r.rev_id
@@ -70,10 +72,11 @@ def get_entries(cursor, start, end, window, limit=100000, filternum=423, newest=
         yield wikilove_t(rev_id=ls[0][0],
                          sender_id=tup.userid,
                          sender_name=tup.username,
-                         receiver_id=None,
+                         receiver_id=tup.title_user_id,
                          receiver_name=tup.title,
                          timestamp=tup.timestamp,
-                         others=tup)
+                         others=tup
+                         message=None)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

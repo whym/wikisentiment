@@ -8,7 +8,7 @@ import pymongo
 import oursql
 import os
 
-wikilove_t = namedtuple('WikiLove', 'rev_id sender_id sender_name receiver_id receiver_name timestamp others')
+wikilove_t = namedtuple('WikiLove', 'rev_id sender_id sender_name receiver_id receiver_name timestamp message others')
 entry_t    = namedtuple('Entry', 'raw features vector')
 pn_t       = namedtuple('PN', 'p n')
 prediction_t = namedtuple('Prediction', 'label confidence')
